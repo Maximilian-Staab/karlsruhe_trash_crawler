@@ -1,28 +1,51 @@
+from muell.config import config
 import json
 import os
 
 import arrow
 import requests
 from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-from influxdb import InfluxDBClient
+import psycopg2
 
-load_dotenv()
 
 WEB_PATH = r"https://web6.karlsruhe.de/service/abfall/akal/akal.php?strasse=RASTATTER%20STRA%C3%9FE&hausnr=77"
-PASSWORD = os.environ['PASSWORD']
 
 TRASH_WHITELIST = [r'Bioabfall', r'Restmüll', r'Wertstoff', r'Papier']
-INFLUXDB_URL = "192.168.0.152"
-INFLUXDB_PORT = "8086"
-INFLUXDB_USER = "trash_service"
-INFLUXDB_DATABASE = "trash_schedule"
 
-client = InfluxDBClient(host=INFLUXDB_URL,
-                        port=INFLUXDB_PORT,
-                        username=INFLUXDB_USER,
-                        password=PASSWORD,
-                        database=INFLUXDB_DATABASE)
+
+def connect():
+    """ Connect to the PostgreSQL database server """
+    conn = None
+    try:
+        # read connection parameters
+        params = config()
+
+        # connect to the PostgreSQL server
+        print('Connecting to the PostgreSQL database...')
+        conn = psycopg2.connect(**params)
+
+        # create a cursor
+        cur = conn.cursor()
+
+        # execute a statement
+        print('PostgreSQL database version:')
+        for trash_type, dates in get_website():
+            for date in dates:
+                print('sending data')
+                cur.execute(
+                    f"INSERT INTO dates(trash_type, date) \
+                    SELECT id AS trash_type, '{date}' FROM trash_types WHERE name='{trash_type}'")
+
+        # commit pooled inserts
+        conn.commit()
+        # close the communication with the PostgreSQL
+        cur.close()
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    finally:
+        if conn is not None:
+            conn.close()
+            print('Database connection closed.')
 
 
 def convert_date(some_date):
@@ -50,38 +73,6 @@ def get_website():
         yield trash_type, dates
 
 
-def _create_payload(trash_type, dates):
-    return [
-        {
-            'measurement': 'trash',
-            'time': str(date),
-            'tags': {
-                'trashType': trash_type
-            },
-            'fields': {
-                "date": str(date)
-            }
-        }
-        for date in dates
-    ]
-
-
-def send_to_influx(client: InfluxDBClient, trash_type: str, dates):
-    payloads = []
-    for date in dates:
-        payloads.append({
-            'measurement': 'trash',
-            'time': str(date),
-            'tags': {
-                'trashType': trash_type
-            },
-            'fields': {
-                "date": str(date)
-            }
-        })
-    client.write_points(payloads)
-
-
 def main():
     payloads = []
     for trash_type, dates in get_website():
@@ -90,4 +81,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    connect()
