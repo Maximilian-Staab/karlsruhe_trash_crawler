@@ -71,7 +71,6 @@ def get_website():
         except AttributeError:
             continue
 
-        trash_type = trash_type.replace('ü', 'ue')
         if trash_type not in TRASH_WHITELIST:
             continue
 
