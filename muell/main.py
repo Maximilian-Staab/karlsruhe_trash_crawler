@@ -38,12 +38,11 @@ def connect():
                     cur.execute(
                         f"INSERT INTO dates(trash_type, date) \
                         SELECT id AS trash_type, '{date}' FROM trash_types WHERE name='{trash_type}'")
+                    conn.commit()
                 except psycopg2.errors.UniqueViolation as error:
                     print(error, 'Rolling back most recent insert.')
                     conn.rollback()
 
-        # commit pooled inserts
-        conn.commit()
         # close the communication with the PostgreSQL
         cur.close()
     except (Exception, psycopg2.DatabaseError) as error:
