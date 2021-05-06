@@ -1,9 +1,12 @@
 import json
 import os
+import time
 
 import arrow
+import click
 import psycopg2
 import requests
+import schedule as pyschedule
 from bs4 import BeautifulSoup
 
 from muell.config import config
@@ -76,10 +79,21 @@ def get_website():
         yield trash_type, dates
 
 
-def main():
-    connect()
+@click.command()
+@click.option('--schedule', is_flag=True, help='Enable scheduled runner (run every 1 to 2 weeks).')
+def main(schedule):
+    if schedule:
+        print('Starting scheduled run.')
+        pyschedule.every(1).to(2).weeks.do(connect)
+        while True:
+            n = pyschedule.idle_seconds()
+            if n > 0:
+                print(f"Waiting for {n/60/60:.0f} Hours ({n/60/60/24:.0f} Days).")
+                time.sleep(n)
+            pyschedule.run_pending()
+    else:
+        connect()
 
 
 if __name__ == '__main__':
     main()
-    connect()
