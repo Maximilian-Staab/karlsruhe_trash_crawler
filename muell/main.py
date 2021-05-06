@@ -1,12 +1,12 @@
-from muell.config import config
 import json
 import os
 
 import arrow
+import psycopg2
 import requests
 from bs4 import BeautifulSoup
-import psycopg2
 
+from muell.config import config
 
 WEB_PATH = r"https://web6.karlsruhe.de/service/abfall/akal/akal.php?strasse=RASTATTER%20STRA%C3%9FE&hausnr=77"
 
@@ -28,13 +28,16 @@ def connect():
         cur = conn.cursor()
 
         # execute a statement
-        print('PostgreSQL database version:')
         for trash_type, dates in get_website():
             for date in dates:
                 print('sending data')
-                cur.execute(
-                    f"INSERT INTO dates(trash_type, date) \
-                    SELECT id AS trash_type, '{date}' FROM trash_types WHERE name='{trash_type}'")
+                try:
+                    cur.execute(
+                        f"INSERT INTO dates(trash_type, date) \
+                        SELECT id AS trash_type, '{date}' FROM trash_types WHERE name='{trash_type}'")
+                except psycopg2.errors.UniqueViolation as error:
+                    print(error, 'Rolling back most recent insert.')
+                    conn.rollback()
 
         # commit pooled inserts
         conn.commit()
@@ -74,12 +77,9 @@ def get_website():
 
 
 def main():
-    payloads = []
-    for trash_type, dates in get_website():
-        payloads.extend(_create_payload(trash_type, dates))
-    print(json.dumps(payloads))
+    connect()
 
 
 if __name__ == '__main__':
-    # main()
+    main()
     connect()
