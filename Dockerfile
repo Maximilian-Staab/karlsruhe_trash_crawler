@@ -9,7 +9,6 @@ WORKDIR /app
 COPY poetry.lock poetry.lock
 COPY pyproject.toml pyproject.toml
 COPY muell muell
-COPY database.ini database.ini
 
 RUN poetry install
 
