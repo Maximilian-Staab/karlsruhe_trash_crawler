@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "muell"
-version = "0.1.0"
+version = "1.0.0"
 description = "Queries the Karlsruhe trash schedule for a specific Street."
 authors = ["Maximilian Staab <maximilian.staab.de@gmail.com>"]
 
@@ -12,7 +12,6 @@ python = "^3.8"
 requests = "^2.25.1"
 bs4 = "^0.0.1"
 arrow = "^1.0.3"
-python-dotenv = "^0.17.0"
 psycopg2-binary = "^2.8.6"
 schedule = "^1.1.0"
 click = "^7.1.2"
