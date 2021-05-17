@@ -41,7 +41,7 @@ async def connect(
     async with aiopg.connect(**params) as conn:
         async with conn.cursor() as cur:
             # execute a statement
-            await cur.execute("SELECT users.id, house_number, streets.name \
+            await cur.execute("SELECT users.telegram_chat_id, house_number, streets.name \
                                FROM users, streets WHERE street = streets.id")
             for user in await cur.fetchall():
                 if user is None:
