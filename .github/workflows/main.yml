@@ -27,3 +27,4 @@ jobs:
           registry: docker.pkg.github.com
           repository: maximilian-staab/karlsruhe_trash_crawler/trash_python
           tag_with_ref: true
+          tags: latest
