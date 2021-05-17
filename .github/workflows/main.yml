@@ -1,10 +1,6 @@
-# This is a basic workflow to help you get started with Actions
+name: Publis Docker image
 
-name: CI
-
-# Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
   push:
     branches: [ main ]
   pull_request:
@@ -13,25 +9,23 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  puth_to_registry:
     runs-on:  ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
-      - name: Build docker image
-        run: docker build -t trash-python . -f Dockerfile
-
-      # Runs a set of commands using the runners shell
-      - name: Tag image
-        run: docker image tag trash-python https://ghcr.io/trash-python
-          
-      - name: Push image
-        run: docker push https://ghcr.io/trash-python
+      - name: Push to GitHub Packages
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: docker.pkg.github.com
+          repository: Maximilian-Staab/karlsruhe_trash_crawler/trash_python
+          tag_with_ref: true
