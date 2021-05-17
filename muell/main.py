@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 from muell.config import config
 
 API_PATH = r"https://web6.karlsruhe.de/service/abfall/akal/akal.php"
-GRAPHQL = "http://192.168.0.207:9123/v1/graphql"
 
 TRASH_WHITELIST = [r'Bioabfall', r'Restmüll', r'Wertstoff', r'Papier']
 
