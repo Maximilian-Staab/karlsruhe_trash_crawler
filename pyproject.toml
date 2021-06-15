@@ -17,6 +17,7 @@ schedule = "^1.1.0"
 click = "^7.1.2"
 aiopg = "^1.2.1"
 aiohttp = "^3.7.4"
+Quart = "^0.15.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.6"

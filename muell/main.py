@@ -1,3 +1,4 @@
+from quart import Quart, request
 import asyncio
 import threading
 import time
@@ -50,6 +51,20 @@ async def connect(
                 await operation(cur, user_id, dict(strasse=street_name, hausnr=street_number or ''))
 
 
+async def connect_single_user(user_id: UserId, params: Mapping[str, str],
+                              operation: Callable[[aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
+    """ Connect to the PostgreSQL database server """
+    # read connection parameters
+    params = config()
+
+    # connect to the PostgreSQL server
+    print('Connecting to the PostgreSQL database...')
+    async with aiopg.connect(**params) as conn:
+        async with conn.cursor() as cur:
+            # execute a statement
+            await operation(cur, user_id, params)
+
+
 def convert_date(some_date):
     return arrow.get(some_date, 'ddd. [den] DD.MM.YYYY', locale='de')
 
@@ -91,17 +106,35 @@ def start_task(
     thread.join()
 
 
+app = Quart(__name__)
+
+
+@app.route('/search', methods=["POST"])
+async def manual_search():
+    street = request.args.get('street')
+    user_id = request.args.get('user_id')
+    house_number = request.args.get('house_number')
+    await connect_single_user(user_id, dict(strasse=street, hausnr=house_number or ''), send_trash)
+
+
 @click.command()
 @click.option('--schedule', 'is_scheduled', is_flag=True,
               help='Enable scheduled runner (run every 1 to 2 weeks).')
-def main(is_scheduled):
+@click.option('--api', is_flag=True, help='Enable the api endpoint to trigger updates for a specific street and house number.')
+def main(is_scheduled, api):
+
+    if api:
+        app.run(debug=True)
+
     if is_scheduled:
         print('Starting scheduled run.')
+        # schedule can't use async, wrap in thread wrapper
         schedule.every(1).to(2).weeks.do(lambda: start_task(send_trash))
         while True:
             n = schedule.idle_seconds()
             if n > 0:
-                print(f"Waiting for {n / 60 / 60:.0f} Hours ({n / 60 / 60 / 24:.0f} Days).")
+                print(
+                    f"Waiting for {n / 60 / 60:.0f} Hours ({n / 60 / 60 / 24:.0f} Days).")
                 time.sleep(n)
             schedule.run_pending()
     else:
