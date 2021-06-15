@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import threading
 import time
 from typing import Callable, Awaitable, AsyncGenerator, Mapping, NewType
@@ -146,7 +147,7 @@ async def manual_search():
                    'specific street and house number.')
 def main(is_scheduled, api):
     if api:
-        app.run(host="192.168.0.150")
+        app.run(host=os.getenv("API_HOST"))
 
     if is_scheduled:
         print('Starting scheduled run.')
