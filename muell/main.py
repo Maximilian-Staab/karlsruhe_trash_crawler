@@ -1,5 +1,6 @@
-from quart import Quart, request
 import asyncio
+import json
+import logging
 import threading
 import time
 from typing import Callable, Awaitable, AsyncGenerator, Mapping, NewType
@@ -10,8 +11,11 @@ import arrow
 import click
 import schedule
 from bs4 import BeautifulSoup
+from quart import Quart, request, Response
 
 from muell.config import config
+
+logger = logging.getLogger("Trash-Crawler")
 
 API_PATH = r"https://web6.karlsruhe.de/service/abfall/akal/akal.php"
 
@@ -21,6 +25,7 @@ UserId = NewType('UserId', int)
 
 
 async def send_trash(cursor: aiopg.cursor.Cursor, user_id: UserId, params: Mapping[str, str]):
+    logger.info("Got params: %s", json.dumps(params, indent=2))
     async for trash_type, dates in get_website(params):
         for date in dates:
             print('sending data')
@@ -29,6 +34,12 @@ async def send_trash(cursor: aiopg.cursor.Cursor, user_id: UserId, params: Mappi
                     SELECT id AS trash_type, '{date}', {user_id} \
                     FROM trash_types WHERE name='{trash_type}' \
                     ON CONFLICT DO NOTHING")
+
+
+async def resolve_street_id(cursor: aiopg.cursor.Cursor, street_id) -> str:
+    await cursor.execute(f"SELECT users.telegram_chat_id, house_number, streets.name \
+                                   FROM users, streets WHERE streets.id = {street_id}")
+    return await cursor.fetchone()
 
 
 async def connect(
@@ -52,14 +63,13 @@ async def connect(
 
 
 async def connect_single_user(user_id: UserId, params: Mapping[str, str],
-                              operation: Callable[[aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
+                              operation: Callable[
+                                  [aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[
+                                      None]]):
     """ Connect to the PostgreSQL database server """
-    # read connection parameters
-    params = config()
-
     # connect to the PostgreSQL server
     print('Connecting to the PostgreSQL database...')
-    async with aiopg.connect(**params) as conn:
+    async with aiopg.connect(**config()) as conn:
         async with conn.cursor() as cur:
             # execute a statement
             await operation(cur, user_id, params)
@@ -111,20 +121,32 @@ app = Quart(__name__)
 
 @app.route('/search', methods=["POST"])
 async def manual_search():
-    street = request.args.get('street')
-    user_id = request.args.get('user_id')
-    house_number = request.args.get('house_number')
-    await connect_single_user(user_id, dict(strasse=street, hausnr=house_number or ''), send_trash)
+    data = await request.get_json()
+    try:
+        new_data = data['event']['data']['new']
+        street_id = new_data['street']
+        user_id = new_data['telegram_chat_id']
+        house_number = new_data['house_number']
+    except KeyError:
+        return "no new data could be extracted", 400
+
+    async with aiopg.connect(**config()) as conn:
+        async with conn.cursor() as cur:
+            street_name = await resolve_street_id(cur, street_id)
+            await connect_single_user(user_id, dict(strasse=street_name, hausnr=house_number or ''),
+                                      send_trash)
+            return Response("Ok")
 
 
 @click.command()
 @click.option('--schedule', 'is_scheduled', is_flag=True,
               help='Enable scheduled runner (run every 1 to 2 weeks).')
-@click.option('--api', is_flag=True, help='Enable the api endpoint to trigger updates for a specific street and house number.')
+@click.option('--api', is_flag=True,
+              help='Enable the api endpoint to trigger updates for a '
+                   'specific street and house number.')
 def main(is_scheduled, api):
-
     if api:
-        app.run(debug=True)
+        app.run(host="192.168.0.150")
 
     if is_scheduled:
         print('Starting scheduled run.')
