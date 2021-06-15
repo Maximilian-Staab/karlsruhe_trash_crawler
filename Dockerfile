@@ -12,4 +12,4 @@ COPY muell muell
 
 RUN poetry install
 
-CMD [ "poetry", "run", "trash-dates", "--schedule"]
+CMD [ "poetry", "run", "trash-dates", "--schedule", "--api"]
