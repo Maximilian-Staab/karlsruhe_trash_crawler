@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+from multiprocessing import Process
 from typing import Callable, Awaitable, AsyncGenerator, Mapping, NewType
 
 import aiohttp as aiohttp
@@ -117,6 +118,18 @@ def start_task(
     thread.join()
 
 
+def scheduler():
+    # schedule can't use async, wrap in thread wrapper
+    schedule.every(1).to(2).weeks.do(lambda: start_task(send_trash))
+    while True:
+        n = schedule.idle_seconds()
+        if n > 0:
+            print(
+                f"Waiting for {n / 60 / 60:.0f} Hours ({n / 60 / 60 / 24:.0f} Days).")
+            time.sleep(n)
+        schedule.run_pending()
+
+
 app = Quart(__name__)
 
 
@@ -146,22 +159,23 @@ async def manual_search():
               help='Enable the api endpoint to trigger updates for a '
                    'specific street and house number.')
 def main(is_scheduled, api):
+    p = None
+    if is_scheduled:
+        logger.info('Starting scheduled run.')
+        p = Process(target=scheduler)
+        p.start()
+    else:
+        logger.info('Starting manual run.')
+        connect(send_trash)
+
     if api:
+        logger.info('Start up api.')
         app.run(host=os.getenv("API_HOST"))
 
-    if is_scheduled:
-        print('Starting scheduled run.')
-        # schedule can't use async, wrap in thread wrapper
-        schedule.every(1).to(2).weeks.do(lambda: start_task(send_trash))
-        while True:
-            n = schedule.idle_seconds()
-            if n > 0:
-                print(
-                    f"Waiting for {n / 60 / 60:.0f} Hours ({n / 60 / 60 / 24:.0f} Days).")
-                time.sleep(n)
-            schedule.run_pending()
-    else:
-        connect(send_trash)
+    try:
+        p.join(5)
+    except AttributeError:
+        pass
 
 
 if __name__ == '__main__':
