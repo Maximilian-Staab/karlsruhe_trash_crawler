@@ -130,26 +130,30 @@ def scheduler():
         schedule.run_pending()
 
 
-app = Quart(__name__)
+def web_server():
+    app = Quart(__name__)
 
+    @app.route('/search', methods=["POST"])
+    async def manual_search():
+        data = await request.get_json()
+        try:
+            new_data = data['event']['data']['new']
+            street_id = new_data['street']
+            user_id = new_data['telegram_chat_id']
+            house_number = new_data['house_number']
+        except KeyError:
+            return "no new data could be extracted", 400
 
-@app.route('/search', methods=["POST"])
-async def manual_search():
-    data = await request.get_json()
-    try:
-        new_data = data['event']['data']['new']
-        street_id = new_data['street']
-        user_id = new_data['telegram_chat_id']
-        house_number = new_data['house_number']
-    except KeyError:
-        return "no new data could be extracted", 400
+        async with aiopg.connect(**config()) as conn:
+            async with conn.cursor() as cur:
+                street_name = await resolve_street_id(cur, street_id)
+                await connect_single_user(user_id,
+                                          dict(strasse=street_name, hausnr=house_number or ''),
+                                          send_trash)
+                return Response("Ok")
 
-    async with aiopg.connect(**config()) as conn:
-        async with conn.cursor() as cur:
-            street_name = await resolve_street_id(cur, street_id)
-            await connect_single_user(user_id, dict(strasse=street_name, hausnr=house_number or ''),
-                                      send_trash)
-            return Response("Ok")
+    logger.info('Start up api.')
+    app.run(host=os.getenv("API_HOST"))
 
 
 @click.command()
@@ -160,18 +164,18 @@ async def manual_search():
                    'specific street and house number.')
 def main(is_scheduled, api):
     p = None
+    if api:
+        p = Process(target=web_server)
+        p.start()
+
     if is_scheduled:
         logger.info('Starting scheduled run.')
-        p = Process(target=scheduler)
-        p.start()
+        scheduler()
     else:
         logger.info('Starting manual run.')
         connect(send_trash)
 
-    if api:
-        logger.info('Start up api.')
-        app.run(host=os.getenv("API_HOST"))
-
+    # will never stop in production (scheduler runs for ever)
     try:
         p.join(5)
     except AttributeError:
