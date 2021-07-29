@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "muell"
-version = "1.0.6"
+version = "1.0.7"
 description = "Queries the Karlsruhe trash schedule for a specific Street."
 authors = ["Maximilian Staab <maximilian.staab.de@gmail.com>"]
 
