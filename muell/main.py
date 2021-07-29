@@ -26,7 +26,7 @@ TRASH_WHITELIST = [r'Bioabfall', r'Restmüll', r'Wertstoff', r'Papier']
 UserId = NewType('UserId', int)
 
 
-async def send_trash(cursor: aiopg.cursor.Cursor, user_id: UserId, params: Mapping[str, str]):
+async def send_trash(cursor: aiopg.Cursor, user_id: UserId, params: Mapping[str, str]):
     logger.info("Got params: %s", json.dumps(params, indent=2))
     async for trash_type, dates in get_website(params):
         for date in dates:
@@ -38,14 +38,14 @@ async def send_trash(cursor: aiopg.cursor.Cursor, user_id: UserId, params: Mappi
                     ON CONFLICT DO NOTHING")
 
 
-async def resolve_street_id(cursor: aiopg.cursor.Cursor, street_id) -> str:
+async def resolve_street_id(cursor: aiopg.Cursor, street_id) -> str:
     await cursor.execute(f"SELECT users.telegram_chat_id, house_number, streets.name \
                                    FROM users, streets WHERE streets.id = {street_id}")
     return await cursor.fetchone()
 
 
 async def connect(
-        operation: Callable[[aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
+        operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
     """ Connect to the PostgreSQL database server """
     # read connection parameters
     params = config()
@@ -66,7 +66,7 @@ async def connect(
 
 async def connect_single_user(user_id: UserId, params: Mapping[str, str],
                               operation: Callable[
-                                  [aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[
+                                  [aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[
                                       None]]):
     """ Connect to the PostgreSQL database server """
     # connect to the PostgreSQL server
@@ -108,7 +108,7 @@ async def get_website(params: Mapping[str, str]):
 
 
 def start_task(
-        operation: Callable[[aiopg.cursor.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
+        operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
     def launcher():
         loop = asyncio.new_event_loop()
         loop.run_until_complete(connect(operation))
@@ -173,7 +173,7 @@ def main(is_scheduled, api):
         scheduler()
     else:
         logger.info('Starting manual run.')
-        connect(send_trash)
+        start_task(send_trash)
 
     # will never stop in production (scheduler runs for ever)
     try:
