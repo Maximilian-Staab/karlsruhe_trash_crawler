@@ -1,17 +1,11 @@
-import asyncio
 import json
 import logging
 import os
-import threading
-import time
-from multiprocessing import Process
 from typing import AsyncGenerator, Awaitable, Callable, Mapping, NewType
 
 import aiohttp as aiohttp
 import aiopg
 import arrow
-import click
-import schedule
 from bs4 import BeautifulSoup
 from quart import Quart, Response, request
 
