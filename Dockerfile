@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster
+FROM python:3.10-slim-buster
 
 RUN apt-get update && \
     apt-get upgrade -y && \
@@ -12,4 +12,4 @@ COPY muell muell
 
 RUN poetry install
 
-CMD [ "poetry", "run", "trash-dates", "--schedule", "--api"]
+CMD [ "poetry", "run", "hypercorn", "-b", "0.0.0.0:5000", "muell.main:app"]

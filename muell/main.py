@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from multiprocessing import Process
-from typing import Callable, Awaitable, AsyncGenerator, Mapping, NewType
+from typing import AsyncGenerator, Awaitable, Callable, Mapping, NewType
 
 import aiohttp as aiohttp
 import aiopg
@@ -13,10 +13,12 @@ import arrow
 import click
 import schedule
 from bs4 import BeautifulSoup
-from quart import Quart, request, Response
+from quart import Quart, Response, request
 
 from muell.config import config
 
+LOGLEVEL = os.environ.get('LOGLEVEL', 'WARNING').upper()
+logging.basicConfig(level=LOGLEVEL)
 logger = logging.getLogger("Trash-Crawler")
 
 API_PATH = r"https://web6.karlsruhe.de/service/abfall/akal/akal.php"
@@ -35,18 +37,20 @@ async def send_trash(cursor: aiopg.Cursor, user_id: UserId, params: Mapping[str,
                 f"Insert INTO dates(trash_type, date, user_id) \
                     SELECT id AS trash_type, '{date}', {user_id} \
                     FROM trash_types WHERE name='{trash_type}' \
-                    ON CONFLICT DO NOTHING")
+                    ON CONFLICT DO NOTHING"
+            )
 
 
 async def resolve_street_id(cursor: aiopg.Cursor, street_id) -> str:
-    await cursor.execute(f"SELECT users.telegram_chat_id, house_number, streets.name \
-                                   FROM users, streets WHERE streets.id = {street_id}")
+    await cursor.execute(
+        f"SELECT users.telegram_chat_id, house_number, streets.name \
+                                   FROM users, streets WHERE streets.id = {street_id}"
+    )
     return await cursor.fetchone()
 
 
-async def connect(
-        operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
-    """ Connect to the PostgreSQL database server """
+async def connect(operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
+    """Connect to the PostgreSQL database server"""
     # read connection parameters
     params = config()
 
@@ -55,8 +59,10 @@ async def connect(
     async with aiopg.connect(**params) as conn:
         async with conn.cursor() as cur:
             # execute a statement
-            await cur.execute("SELECT users.telegram_chat_id, house_number, streets.name \
-                               FROM users, streets WHERE street = streets.id")
+            await cur.execute(
+                "SELECT users.telegram_chat_id, house_number, streets.name \
+                               FROM users, streets WHERE street = streets.id"
+            )
             for user in await cur.fetchall():
                 if user is None:
                     return
@@ -64,11 +70,12 @@ async def connect(
                 await operation(cur, user_id, dict(strasse=street_name, hausnr=street_number or ''))
 
 
-async def connect_single_user(user_id: UserId, params: Mapping[str, str],
-                              operation: Callable[
-                                  [aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[
-                                      None]]):
-    """ Connect to the PostgreSQL database server """
+async def connect_single_user(
+    user_id: UserId,
+    params: Mapping[str, str],
+    operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]],
+):
+    """Connect to the PostgreSQL database server"""
     # connect to the PostgreSQL server
     print('Connecting to the PostgreSQL database...')
     async with aiopg.connect(**config()) as conn:
@@ -107,80 +114,38 @@ async def get_website(params: Mapping[str, str]):
                 yield trash_type, dates
 
 
-def start_task(
-        operation: Callable[[aiopg.Cursor, UserId, Mapping[str, str]], Awaitable[None]]):
-    def launcher():
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(connect(operation))
-
-    thread = threading.Thread(target=launcher)
-    thread.start()
-    thread.join()
+app = Quart(__name__)
 
 
-def scheduler():
-    # schedule can't use async, wrap in thread wrapper
-    schedule.every(1).to(2).weeks.do(lambda: start_task(send_trash))
-    while True:
-        n = schedule.idle_seconds()
-        if n > 0:
-            print(
-                f"Waiting for {n / 60 / 60:.0f} Hours ({n / 60 / 60 / 24:.0f} Days).")
-            time.sleep(n)
-        schedule.run_pending()
-
-
-def web_server():
-    app = Quart(__name__)
-
-    @app.route('/search', methods=["POST"])
-    async def manual_search():
-        data = await request.get_json()
-        try:
-            new_data = data['event']['data']['new']
-            street_id = new_data['street']
-            user_id = new_data['telegram_chat_id']
-            house_number = new_data['house_number']
-        except KeyError:
-            return "no new data could be extracted", 400
-
-        async with aiopg.connect(**config()) as conn:
-            async with conn.cursor() as cur:
-                street_name = await resolve_street_id(cur, street_id)
-                await connect_single_user(user_id,
-                                          dict(strasse=street_name, hausnr=house_number or ''),
-                                          send_trash)
-                return Response("Ok")
-
-    logger.info('Start up api.')
-    app.run(host=os.getenv("API_HOST"))
-
-
-@click.command()
-@click.option('--schedule', 'is_scheduled', is_flag=True,
-              help='Enable scheduled runner (run every 1 to 2 weeks).')
-@click.option('--api', is_flag=True,
-              help='Enable the api endpoint to trigger updates for a '
-                   'specific street and house number.')
-def main(is_scheduled, api):
-    p = None
-    if api:
-        p = Process(target=web_server)
-        p.start()
-
-    if is_scheduled:
-        logger.info('Starting scheduled run.')
-        scheduler()
-    else:
-        logger.info('Starting manual run.')
-        start_task(send_trash)
-
-    # will never stop in production (scheduler runs for ever)
+@app.route('/search', methods=["POST"])
+async def manual_search():
+    data = await request.get_json()
     try:
-        p.join(5)
-    except AttributeError:
-        pass
+        new_data = data['event']['data']['new']
+        street_id = new_data['street']
+        user_id = new_data['telegram_chat_id']
+        house_number = new_data['house_number']
+    except KeyError:
+        return "no new data could be extracted", 400
+
+    async with aiopg.connect(**config()) as conn:
+        async with conn.cursor() as cur:
+            street_name = await resolve_street_id(cur, street_id)
+            await connect_single_user(
+                user_id, dict(strasse=street_name, hausnr=house_number or ''), send_trash
+            )
+            return Response("Ok")
 
 
-if __name__ == '__main__':
-    main()
+@app.route('/update', methods=['POST'])
+async def update_all():
+    await connect(send_trash)
+    return Response("Ok")
+
+
+@app.route('/healthcheck', methods=['GET'])
+async def healthcheck():
+    return Response("Ok")
+
+
+logger.info('Start up api.')
