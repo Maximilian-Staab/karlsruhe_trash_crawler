@@ -92,9 +92,9 @@ async def get_website(params: Mapping[str, str]):
         async with session.get(API_PATH, params=params) as response:
             soup = BeautifulSoup(await response.content.read(), 'html.parser')
 
-            table = soup.find(id="foo").find('table')
-            async for row in _async_wrapper(table.find_all('tr')):
-                trash_type, dates = row.find_all('td')[1:3]
+            rows = soup.find(id="nfoo").find("form").find_all('div', {"class": "row"})[4:]
+            async for row in _async_wrapper(rows):
+                trash_type, dates = row.find_all('div')[1:3]
 
                 try:
                     trash_type = trash_type.string.split(',')[0]
