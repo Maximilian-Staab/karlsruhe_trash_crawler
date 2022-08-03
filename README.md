@@ -18,9 +18,10 @@ For more information, see ....
 Add these variables to connect to the PostgreSQL database:
 
 | Key               | Default  | Description                              |
-| ----------------- | :------: | ---------------------------------------- |
+|-------------------| :------: |------------------------------------------|
 | POSTGRESQL_HOST   |          | Address the database can be reached with |
 | POSTGRESQL_USER   | postgres | Username for the database                |
+| POSTGRESQL_DB     | postgres | Name to use for the database             |
 | POSTGRESQL_SECRET |          | Password for PostgreSQL                  |
 | POSTGRESQL_PORT   |   5432   |
 
