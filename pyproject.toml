@@ -8,18 +8,18 @@ authors = ["Maximilian Staab <maximilian.staab.de@gmail.com>"]
 trash-dates = "muell.main:main"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 requests = "^2.25.1"
 bs4 = "^0.0.1"
 arrow = "^1.0.3"
 psycopg2-binary = "^2.8.6"
 aiopg = "^1.2.1"
-aiohttp = "^3.7.4"
+aiohttp = "^3.13.3"
 Quart = "^0.15.1"
 hypercorn = "^0.13.2"
 Jinja2 = "<3.1"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 autopep8 = "^1.5.6"
 pytest = "^6.2.3"
 requests-mock = "^1.9.2"
